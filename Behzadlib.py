@@ -57,7 +57,6 @@ def func_gridcell_area(Lat_bound_regrid, Lon_bound_regrid):
     return GridCell_Area
 
 
-
 def func_oceanlandmask(Lat_regrid_2D, Lon_regrid_2D):
     lat_n_regrid, lon_n_regrid =Lat_regrid_2D.shape[0], Lat_regrid_2D.shape[1]
     Ocean_Land_mask = empty ((lat_n_regrid, lon_n_regrid)) * nan
@@ -148,7 +147,7 @@ def func_EOF (Calc_Var, Calc_Lat): # Empirical Orthogonal Functions maps and ind
     EOF_all=[]
     for i in range(Calc_Var.shape[0]):
         
-        print ('EOF calc - Year: ', i)
+        print ('EOF calc - Year: ', i+1)
         data_i=Calc_Var[i,:,:]
         data_i=np.squeeze(data_i)        
 
@@ -186,24 +185,181 @@ def func_EOF (Calc_Var, Calc_Lat): # Empirical Orthogonal Functions maps and ind
     return EOF_spatial_pattern, EOF_time_series, EOF_variance_prcnt
 
 
+def func_plotmap_contourf(P_Var, P_Lon, P_Lat, P_range, P_title, P_unit, P_cmap, P_proj, P_lon0, P_latN, P_latS, P_c_fill):
+### P_Var= Plotting variable, 2D(lat,lon) || P_Lon=Longitude, 2D || P_range=range of plotted values, can be vector or number || P_title=Plot title || P_unit=Plot colorbar unit
+### P_cmap= plt.cm.seismic , plt.cm.jet || P_proj= 'cyl', 'npstere', 'spstere' || P_lon0=middle longitude of plot || P_latN=upper lat bound of plot || P_latS=lower lat bound of plot || P_c_fill= 'fill' fills the continets with grey color
+    
+#%% Example :
+    
+#Plot_Var = np.nanmean(Wind_Curl,axis=0)
+#cmap_limit=np.nanmax(np.abs( np.nanpercentile(Plot_Var, 99)))
+#Plot_range=np.linspace(-cmap_limit,cmap_limit,101) ### Or:  Plot_range=100
+#Plot_unit='(N/m3)'; Plot_title= 'Wind Curl (1E-7 N/m3) - (contour lines = Tau_x) - '+str(year_start)+'-'+str(year_end)+' - '+str(GCM)
+#fig, m = func_plotmap_contourf(Plot_Var, Lon_regrid_2D, Lat_regrid_2D, Plot_range, Plot_title, Plot_unit, plt.cm.seismic, 'cyl', 210., 80., -80., 'fill')
+#fig.savefig(dir_figs+'name.png', format='png', dpi=300, transparent=True, bbox_inches='tight')
+#%%  
+    fig=plt.figure()
+    
+    if P_proj=='npstere':
+        m = Basemap( projection='npstere',lon_0=0, boundinglat=30)
+        m.drawparallels(np.arange(-90,90,20), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)
+        m.drawmeridians(np.arange(0,360,30), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)
+    elif P_proj=='spstere':
+        m = Basemap( projection='spstere',lon_0=180, boundinglat=-30)
+        m.drawparallels(np.arange(-90,90,20), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)
+        m.drawmeridians(np.arange(0,360,30), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)        
+    else:
+         m = Basemap( projection=P_proj, lon_0=P_lon0, llcrnrlon=P_lon0-180, llcrnrlat=P_latS, urcrnrlon=P_lon0+180, urcrnrlat=P_latN)
+         m.drawparallels(np.arange(P_latS, P_latN+0.001, 40.),labels=[True,False,False,False], linewidth=0.01, color='k', fontsize=20) # labels = [left,right,top,bottom] # Latitutes
+         m.drawmeridians(np.arange(P_lon0-180,P_lon0+180,60.),labels=[False,False,False,True], linewidth=0.01, color='k', fontsize=20) # labels = [left,right,top,bottom] # Longitudes        
+    if P_c_fill=='fill':
+        m.fillcontinents(color='0.8')
+    m.drawcoastlines(linewidth=1.0, linestyle='solid', color='k', antialiased=1, ax=None, zorder=None)
+    im=m.contourf(P_Lon, P_Lat, P_Var,P_range,latlon=True, cmap=P_cmap, extend='both')
+    if P_proj=='npstere' or P_proj=='spstere':
+        cbar = m.colorbar(im,"right", size="4%", pad="14%")
+    else:
+        cbar = m.colorbar(im,"right", size="3%", pad="2%")
+    cbar.ax.tick_params(labelsize=20) 
+    cbar.set_label(P_unit)
+    plt.show()
+    plt.title(P_title, fontsize=18)
+    mng = plt.get_current_fig_manager()
+    mng.window.showMaximized() # Maximizes the plot window to save figures in full
+    
+    #m = Basemap( projection='cyl',lon_0=210., llcrnrlon=30.,llcrnrlat=-80.,urcrnrlon=390.,urcrnrlat=80.)    
+    #m.drawparallels(np.arange(-90.,90.001,30.),labels=[True,False,False,False], linewidth=0.01, color='k', fontsize=20) # labels = [left,right,top,bottom] # Latitutes
+    #m.drawmeridians(np.arange(0.,360.,60.),labels=[False,False,False,True], linewidth=0.01, color='k', fontsize=18) # labels = [left,right,top,bottom] # Longitudes
+    #plt.close()
+    
+    return fig, m
 
 
+#### Compute and plot lagged correlation plot####
+def func_plot_lagcor_sig(P_Var_x, P_Var_y, lag, P_title, P_color, P_legend, P_legend_loc, P_v_i):
+#%% Example :
+    
+#fig=plt.figure()
+#func_plot_lagcor_sig(WS_index_surface_rm[:-9], LAB_index_rm[:-9], 40, P_title, 'y', 'LAB index (Temp at 500m depth)', 'best', '-')
+#func_plot_lagcor_sig(WS_index_surface_rm[:-9], Winds_40S60S_0W30W_m[:-9], 40, P_title, 'g', 'Zonal Winds [40S60S, 0W30W]', 'best', '-')
+#func_plot_lagcor_sig(WS_index_surface_rm[:-9], AMOC_max_50S_m[:-9], 40, P_title, 'b', 'AMOC max 50S', 'best', '-')
+#func_plot_lagcor_sig(WS_index_surface_rm[:-9], AMOC_max_30S_m[:-9], 40, P_title, 'r', 'AMOC max 30S', 'best', '-')
+#plt.ylim(-0.7,0.7)
+#fig.savefig(dir_figs+'name.png', format='png', dpi=300, transparent=True, bbox_inches='tight')
+###  P_v_i='yes' shows the P-value plot of the corrolation
+### P_legend_loc = 'best' or 'lower left' or 'right' or 'center' or ...
+#%%    
+    R_val=[]
+    P_val=[]
+    from scipy import stats
+    for i in range(2*lag):
+        slope, intercept, r_value, p_value, std_err = stats.linregress(P_Var_x[lag:len(P_Var_x)-lag], P_Var_y[i:len(P_Var_y)-2*lag+i])
+        R_val.append(r_value)
+        P_val.append(p_value)
+    xx=np.linspace(-lag,lag+1, 2*lag)
+    plt.grid(True,which="both",ls="-", color='0.65')
+    plt.plot(xx, R_val, P_color, label=P_legend, linewidth=3.0)
+    if P_v_i=='yes':
+        plt.plot(xx, P_val, P_color, ls='--')#, label='Significance (P-value)')
+    plt.xlabel('Years lag', fontsize=18)
+    plt.ylabel('Correlation coefficient (R)', fontsize=18)
+    plt.title(P_title, fontsize=18)
+    plt.xticks(fontsize = 20); plt.yticks(fontsize = 24)
+    plt.legend()
+    #plt.show()
+    plt.legend(prop={'size': 15}, loc=P_legend_loc, fancybox=True, framealpha=0.8)
+    l = plt.axhline(y=0, color='k')
+    mng = plt.get_current_fig_manager()
+    mng.window.showMaximized() # Maximizes the plot window to save figures in full
+
+    #return fig
 
 
+#### Compute and plot Power Spectral Density plots using welch method####
+def plot_PSD_welch_conf(P_Var, P_fq, P_c_probability, P_rho, P_smooth, P_title, P_color, P_legend, P_legend_loc):
 
+### P_c_probability= 0.95 or 0.05 or '-' = confidence interval levels, if the input is not a number then teh confidence intervals won't be plptted
+### P_rho = 'yes' or 0.7 or '-' = Red noise significance line, if 'yes' then the Rho and line will be calculated, if P_rho is a number then it will be given as the Rho value, else NO Red noise significance line will be plotted
+### P_smooth = 9 (should be even number) or '-' = Number of years for smoothing the PSD line and confidence intervals, if no number is given then NO smoothing will be applied
+### P_Var= Plotting variable at X-axis, 1D(X) || P_title=Plot title || P_color=Plot line color || P_legend=Plot variable name to be shown in Plot Legend 
+### P_fq=PSD Welch method's sampling frequency of the x time series in units of Hz (Defaults to 1.0) || P_legend_loc=location of legend, 'best' or 'lower left' or 'right' or 'center' or ...
+#%% Example :
 
+#P_Var=WS_index ; P_legend='WS Convection Index' ; P_color='r'
+#P_title='Power Spectral Density - WS Convection Index with 95% confidence intervals - '+str(year_start)+'-'+str(year_end)+' - '+str(GCM)
+#fig=plt.figure()
+#ff,PSD=plot_PSD_welch_conf(P_Var, 1, 0.95, 'yes', 9, P_title, P_color, P_legend, 'lower right')
+#plt.ylim(1e-5,1e3) #;plt.xlim(1,500)
+#fig.savefig(dir_figs+'name.png', format='png', dpi=300, transparent=True, bbox_inches='tight') 
+### 
 
+    from scipy.stats import chi2    
+    from scipy import signal
 
+    ff,PSD = signal.welch(P_Var,P_fq) # ff= Array of sample frequencies  ,  PSD = Pxx, Power spectral density or power spectrum of x (which is P_Var)
+    X_var=np.linspace(1,len(P_Var)/2+1,len(P_Var)/2+1)
+    X_var=ff**(-1); X_var=X_var
+    
+    if P_rho=='yes':
+        Rho = np.nansum( (P_Var[:-1] - np.nanmean(P_Var,axis=0)) * (P_Var[1:] - np.nanmean(P_Var,axis=0)) ,axis=0) / np.nansum( (P_Var[:-1] - np.nanmean(P_Var,axis=0)) * (P_Var[:-1] - np.nanmean(P_Var,axis=0)) ,axis=0)
+    elif type(P_rho)==float:
+        Rho=P_rho # Rho is the memory parameter
+    
+    if type(P_smooth)==float or type(P_smooth)==int:
+        P_smooth=np.int(P_smooth)
+        v = 2*P_smooth # P is the number of estimates in welch function and also the degree of freedom.
+        
+        sm= np.int( (P_smooth-1)/2)
+        P_smooth = np.int( (sm*2)+1 ) # P_smoothhs to be even number for centered smoothing; in case odd number was given, it's changed to an even number by subtracting 1
+        PSD_m=copy.deepcopy(PSD) ## Smoothing the variable
+        for ii in range(sm,PSD.shape[0]-sm+1):
+            PSD_m[ii]=np.nanmean(PSD[ii-sm:ii+sm])
+        
+        PSD_m=PSD_m[sm:-sm]
+        X_var_m=X_var[sm:-sm]
+        P_legend=P_legend+' ('+str(np.int(P_smooth))+'yr smoothed)'
+        
+    else:
+        v=2
 
+        PSD_m=copy.deepcopy(PSD)
+        X_var_m=copy.deepcopy(X_var)
+        
+    if type(P_c_probability)==float:
+        if P_c_probability < 0.5:
+            P_c_probability=1-P_c_probability # In case the P_c_probability is input 0.05 instead of 0.95 for example
+        alfa = 1 - P_c_probability
 
-
-
-
-
-
-
-
-
+    if P_rho=='yes' or type(P_rho)==float or type(P_rho)==int:
+        if type(P_c_probability)!=float: # In case the P_c_probability is not given since confidence interval calculation is not necessary, but red noise significance line is needed
+            alfa=0.05
+            
+        F_x_v = (1-Rho**2) / (1 + Rho**2 - 2*Rho*np.cos(2*np.pi*ff ) )  #  F_x_v is the power spectraum   
+        F_x_v_star=np.float( np.real( np.nanmean(PSD,axis=0) / np.nanmean(F_x_v,axis=0) ) ) * F_x_v 
+        Pr_alpha = (1/v) * F_x_v_star * np.float( chi2.ppf([1 - alfa], v) )
+    
+    plt.grid(True,which="both",ls="-", color='0.65')
+    plt.loglog(X_var_m,PSD_m, color=P_color, label=P_legend)
+    plt.legend(loc='best')
+    plt.xlabel('Period (years)', fontsize=18)
+    plt.ylabel('Spectral Density', fontsize=18) 
+    plt.xticks(fontsize = 20); plt.yticks(fontsize = 20)
+    #plt.gca().invert_xaxis()
+    if type(P_c_probability)==float:
+        Chi = chi2.ppf([1 - alfa / 2, alfa / 2], v)
+        
+        PSDc_lower = PSD_m * ( v / Chi[0] )
+        PSDc_upper = PSD_m * ( v / Chi[1] ) 
+        plt.loglog(X_var_m,PSDc_lower, color='g', ls='--', label=str(np.int( (1 - alfa) *100))+'% confidence intervals')
+        plt.loglog(X_var_m,PSDc_upper, color='g', ls='--')
+    if P_rho=='yes' or type(P_rho)==float or type(P_rho)==int:
+        plt.loglog(X_var,Pr_alpha , color='b', ls='--', label=str(np.int( (1 - alfa) *100))+'% Red Noise Significance Level')
+    plt.legend(prop={'size': 20}, loc=P_legend_loc, fancybox=True, framealpha=0.8)
+    plt.title(P_title, fontsize=18) 
+    plt.show()
+    mng = plt.get_current_fig_manager()
+    mng.window.showMaximized() # Maximizes the plot window to save figures in full
+    return ff,PSD
 
 
 
