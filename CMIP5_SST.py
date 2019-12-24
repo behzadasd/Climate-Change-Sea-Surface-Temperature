@@ -226,7 +226,7 @@ for ii in n_range:
     im1 = m.pcolormesh(Lon_regrid_2D, Lat_regrid_2D, Plot_Var, norm=norm, shading='flat', cmap=plt.cm.RdBu_r, latlon=True) # Choose colormap: https://matplotlib.org/users/colormaps.html
     
     plt.title(GCM_Names[ii])
-plt.suptitle( ('Climate Chaneg impact on sea surface temperature under RCP8.5 Scenario - '+str(start_date_rcp8p5)+'-'+str(end_date_rcp8p5)+' minus '+ str(start_date_hist)+'-'+str(end_date_hist)), fontsize=18)
+plt.suptitle( ('Climate Change impact on sea surface temperature under RCP8.5 Scenario - '+str(start_date_rcp8p5)+'-'+str(end_date_rcp8p5)+' minus '+ str(start_date_hist)+'-'+str(end_date_hist)), fontsize=18)
 cbar = plt.colorbar(cax=plt.axes([0.93, 0.1, 0.015, 0.8]), extend='both') # cax = [left position, bottom postion, width, height] 
 cbar.set_label(Var_plot_unit)
 plt.show()
