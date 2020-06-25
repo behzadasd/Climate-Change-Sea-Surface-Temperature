@@ -9,7 +9,7 @@ Functions code: Behzadlib.py
 * This code contains various analysis/plotting functions that are imported in the main code as needed
 
 Code #2: CMIP5_SST_2.py
-* Does same job as the CMIP5_SST_xarray.py code, but reads .nc files using a different method by listing all file names and reading the files one by one (instead of loading them all using MFDATSET) - This is useful when the data are huge and the computer memory is low
+* Does same job as the CMIP5_SST.py code, but reads .nc files using a different method by listing all file names and reading the files one by one (instead of loading them all using MFDATSET) - This is useful when the data are huge and the computer memory is low
 
 Final plotting products:
 
