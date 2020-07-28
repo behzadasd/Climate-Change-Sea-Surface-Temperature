@@ -67,94 +67,6 @@ def func_regrid(Data_orig, Lat_orig, Lon_orig, Lat_regrid_2D, Lon_regrid_2D):
             Data_regrid.append(zi)
         return np.asarray(Data_regrid)
 
-def func_gridcell_area(Lat_bound_regrid, Lon_bound_regrid): 
-    ### Calculate Grid Cell areas, based on given coordinates [output units: million km2] ###
-    earth_R = 6378 # Earth Radius - Unit is kilometer (km)
-    GridCell_Area = np.empty((Lat_bound_regrid.shape[0], Lon_bound_regrid.shape[0] )) *np.nan
-    for ii in range(Lat_bound_regrid.shape[0]):
-        for jj in range(Lon_bound_regrid.shape[0]):
-            GridCell_Area [ii,jj] = math.fabs( (earth_R**2) * (math.pi/180) * (Lon_bound_regrid[jj,1] - Lon_bound_regrid[jj,0])  * ( math.sin(math.radians(Lat_bound_regrid[ii,1])) - math.sin(math.radians(Lat_bound_regrid[ii,0]))) )
-    GridCell_Area = GridCell_Area / 1e6 # to convert the area to million km2
-    
-    return GridCell_Area
-
-def func_EOF (Calc_Var, Calc_Lat): # Empirical Orthogonal Functions maps and indices
-    EOF_all=[]
-    for i in range(Calc_Var.shape[0]):
-        print ('EOF calc - Year: ', i)
-        data_i=np.squeeze(Calc_Var[i,:,:])       
-        data_EOF=[]
-        if i==0:
-            [lat_ii,lon_jj] = np.where(~np.isnan(data_i))
-
-        for kk in range(len(lat_ii)):
-            data_EOF.append( data_i[lat_ii[kk],lon_jj[kk]]*np.sqrt(np.cos(np.deg2rad(Calc_Lat[lat_ii[kk],lon_jj[kk]]))) )
-        EOF_all.append(data_EOF)    
-    EOF_all=np.asarray(EOF_all)
-    
-    C=np.cov(np.transpose(EOF_all))
-    eigval,eigvec=np.linalg.eig(C)
-    eigval=np.real(eigval)
-    eigvec=np.real(eigvec)
-    
-    EOF_spatial_pattern = np.empty((10,Calc_Var.shape[1],Calc_Var.shape[2]))*np.nan # Stores first 10 EOFs for spatial pattern map
-    for ss in range(EOF_spatial_pattern.shape[0]):
-        for kk in range(len(lat_ii)):
-            EOF_spatial_pattern[ss,lat_ii[kk],lon_jj[kk]] = eigvec[kk,ss]
-
-    EOF_time_series = np.empty((10,Calc_Var.shape[0]))*np.nan # Stores first 10 EOFs times series
-    for ss in range(EOF_time_series.shape[0]):
-        EOF_time_series[ss,:] = np.dot(np.transpose(eigvec[:,ss]),np.transpose(EOF_all))
-        
-    EOF_variance_prcnt = np.empty((10))*np.nan # Stores first 10 EOFs variance percentage
-    for ss in range(EOF_variance_prcnt.shape[0]):
-        EOF_variance_prcnt[ss]=( eigval[ss]/np.nansum(eigval,axis=0) ) * 100        
-
-    return EOF_spatial_pattern, EOF_time_series, EOF_variance_prcnt
-    
-def func_butterworth(var, CutOff_T, n_order):
-    ### ButterWorth Filtering of high frequency signals
-    # CutOff_T = Cut-off period , n_order = Order of filtering
-    from scipy import signal
-    fs = 1  # Sampling frequency, equal to 1 year in our case
-    fc = 1/CutOff_T  # Cut-off frequency of the filter
-    ww = fc / (fs / 2) # Normalize the frequency
-    bb, aa = signal.butter(n_order, ww, 'low')
-    return signal.filtfilt(bb, aa, var)
-
-def func_plotmap_contourf(P_Var, P_Lon, P_Lat, P_range, P_title, P_unit, P_cmap, P_proj, P_lon0, P_latN, P_latS, P_c_fill):
-### P_Var= Plotting variable, 2D(lat,lon) || P_Lon=Longitude, 2D || P_range=range of plotted values, can be vector or number || P_title=Plot title || P_unit=Plot colorbar unit
-### P_cmap= plt.cm.seismic , plt.cm.jet || P_proj= 'cyl', 'npstere', 'spstere' || P_lon0=middle longitude of plot || P_latN=upper lat bound of plot || P_latS=lower lat bound of plot || P_c_fill= 'fill' fills the continets with grey color  
-    fig=plt.figure()
-    
-    if P_proj=='npstere':
-        m = Basemap( projection='npstere',lon_0=0, boundinglat=30)
-        m.drawparallels(np.arange(-90,90,20), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)
-        m.drawmeridians(np.arange(0,360,30), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)
-    elif P_proj=='spstere':
-        m = Basemap( projection='spstere',lon_0=180, boundinglat=-30)
-        m.drawparallels(np.arange(-90,90,20), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)
-        m.drawmeridians(np.arange(0,360,30), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)        
-    else:
-         m = Basemap( projection=P_proj, lon_0=P_lon0, llcrnrlon=P_lon0-180, llcrnrlat=P_latS, urcrnrlon=P_lon0+180, urcrnrlat=P_latN)
-         m.drawparallels(np.arange(P_latS, P_latN+0.001, 40.),labels=[True,False,False,False], linewidth=0.01, color='k', fontsize=20) # labels = [left,right,top,bottom] # Latitutes
-         m.drawmeridians(np.arange(P_lon0-180,P_lon0+180,60.),labels=[False,False,False,True], linewidth=0.01, color='k', fontsize=20) # labels = [left,right,top,bottom] # Longitudes        
-    if P_c_fill=='fill':
-        m.fillcontinents(color='0.8')
-    m.drawcoastlines(linewidth=1.0, linestyle='solid', color='k', antialiased=1, ax=None, zorder=None)
-    im=m.contourf(P_Lon, P_Lat, P_Var,P_range,latlon=True, cmap=P_cmap, extend='both')
-    if P_proj=='npstere' or P_proj=='spstere':
-        cbar = m.colorbar(im,"right", size="4%", pad="14%")
-    else:
-        cbar = m.colorbar(im,"right", size="3%", pad="2%")
-    cbar.ax.tick_params(labelsize=20) 
-    cbar.set_label(P_unit)
-    plt.show()
-    plt.title(P_title, fontsize=18)
-    mng = plt.get_current_fig_manager()
-    mng.window.showMaximized()
-    return fig, m
-
 ### Regrdridding calculations - creating new grid coordinates, which will be used in regridding all models to the same resolution
 lat_n_regrid, lon_n_regrid = 180, 360 # Number of Lat and Lon elements in the regridded data
 lon_min_regrid, lon_max_regrid = 0, 360 # Min and Max value of Lon in the regridded data
@@ -241,6 +153,18 @@ mng.window.showMaximized() # Maximizes the plot window to save figures in full
 fig.savefig(dir_figs +'/Fig_CMIP5_SST_climate_change_Impact_RCP8p5.png', format='png', dpi=300, transparent=True, bbox_inches='tight')
 plt.close()
 
+######################################################################
+def func_gridcell_area(Lat_bound_regrid, Lon_bound_regrid): 
+    ### Calculate Grid Cell areas, based on given coordinates [output units: million km2] ###
+    earth_R = 6378 # Earth Radius - Unit is kilometer (km)
+    GridCell_Area = np.empty((Lat_bound_regrid.shape[0], Lon_bound_regrid.shape[0] )) *np.nan
+    for ii in range(Lat_bound_regrid.shape[0]):
+        for jj in range(Lon_bound_regrid.shape[0]):
+            GridCell_Area [ii,jj] = math.fabs( (earth_R**2) * (math.pi/180) * (Lon_bound_regrid[jj,1] - Lon_bound_regrid[jj,0])  * ( math.sin(math.radians(Lat_bound_regrid[ii,1])) - math.sin(math.radians(Lat_bound_regrid[ii,0]))) )
+    GridCell_Area = GridCell_Area / 1e6 # to convert the area to million km2
+    
+    return GridCell_Area
+
 ### Change in global SST in 21st century vs 20st centiru average ###
 # Calculate Grid Cell areas in million km2 - This function is saved in Behzadlib code in this directory - imported at the begenning
 GridCell_Area = func_gridcell_area(Lat_bound_regrid, Lon_bound_regrid)
@@ -268,6 +192,84 @@ mng = plt.get_current_fig_manager()
 mng.window.showMaximized() # Maximizes the plot window to save figures in full
 fig.savefig(dir_figs+'/Fig_CMIP5_SST_climate_change_Impact_RCP8p5_scatter.png', format='png', dpi=300, transparent=True, bbox_inches='tight')
 plt.close()
+
+###############################################################
+def func_EOF (Calc_Var, Calc_Lat): # Empirical Orthogonal Functions maps and indices
+    EOF_all=[]
+    for i in range(Calc_Var.shape[0]):
+        print ('EOF calc - Year: ', i)
+        data_i=np.squeeze(Calc_Var[i,:,:])       
+        data_EOF=[]
+        if i==0:
+            [lat_ii,lon_jj] = np.where(~np.isnan(data_i))
+
+        for kk in range(len(lat_ii)):
+            data_EOF.append( data_i[lat_ii[kk],lon_jj[kk]]*np.sqrt(np.cos(np.deg2rad(Calc_Lat[lat_ii[kk],lon_jj[kk]]))) )
+        EOF_all.append(data_EOF)    
+    EOF_all=np.asarray(EOF_all)
+    
+    C=np.cov(np.transpose(EOF_all))
+    eigval,eigvec=np.linalg.eig(C)
+    eigval=np.real(eigval)
+    eigvec=np.real(eigvec)
+    
+    EOF_spatial_pattern = np.empty((10,Calc_Var.shape[1],Calc_Var.shape[2]))*np.nan # Stores first 10 EOFs for spatial pattern map
+    for ss in range(EOF_spatial_pattern.shape[0]):
+        for kk in range(len(lat_ii)):
+            EOF_spatial_pattern[ss,lat_ii[kk],lon_jj[kk]] = eigvec[kk,ss]
+
+    EOF_time_series = np.empty((10,Calc_Var.shape[0]))*np.nan # Stores first 10 EOFs times series
+    for ss in range(EOF_time_series.shape[0]):
+        EOF_time_series[ss,:] = np.dot(np.transpose(eigvec[:,ss]),np.transpose(EOF_all))
+        
+    EOF_variance_prcnt = np.empty((10))*np.nan # Stores first 10 EOFs variance percentage
+    for ss in range(EOF_variance_prcnt.shape[0]):
+        EOF_variance_prcnt[ss]=( eigval[ss]/np.nansum(eigval,axis=0) ) * 100        
+
+    return EOF_spatial_pattern, EOF_time_series, EOF_variance_prcnt
+    
+def func_butterworth(var, CutOff_T, n_order):
+    ### ButterWorth Filtering of high frequency signals
+    # CutOff_T = Cut-off period , n_order = Order of filtering
+    from scipy import signal
+    fs = 1  # Sampling frequency, equal to 1 year in our case
+    fc = 1/CutOff_T  # Cut-off frequency of the filter
+    ww = fc / (fs / 2) # Normalize the frequency
+    bb, aa = signal.butter(n_order, ww, 'low')
+    return signal.filtfilt(bb, aa, var)
+
+def func_plotmap_contourf(P_Var, P_Lon, P_Lat, P_range, P_title, P_unit, P_cmap, P_proj, P_lon0, P_latN, P_latS, P_c_fill):
+### P_Var= Plotting variable, 2D(lat,lon) || P_Lon=Longitude, 2D || P_range=range of plotted values, can be vector or number || P_title=Plot title || P_unit=Plot colorbar unit
+### P_cmap= plt.cm.seismic , plt.cm.jet || P_proj= 'cyl', 'npstere', 'spstere' || P_lon0=middle longitude of plot || P_latN=upper lat bound of plot || P_latS=lower lat bound of plot || P_c_fill= 'fill' fills the continets with grey color  
+    fig=plt.figure()
+    
+    if P_proj=='npstere':
+        m = Basemap( projection='npstere',lon_0=0, boundinglat=30)
+        m.drawparallels(np.arange(-90,90,20), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)
+        m.drawmeridians(np.arange(0,360,30), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)
+    elif P_proj=='spstere':
+        m = Basemap( projection='spstere',lon_0=180, boundinglat=-30)
+        m.drawparallels(np.arange(-90,90,20), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)
+        m.drawmeridians(np.arange(0,360,30), labels=[1,1,0,1], linewidth=1, color='k', fontsize=20)        
+    else:
+         m = Basemap( projection=P_proj, lon_0=P_lon0, llcrnrlon=P_lon0-180, llcrnrlat=P_latS, urcrnrlon=P_lon0+180, urcrnrlat=P_latN)
+         m.drawparallels(np.arange(P_latS, P_latN+0.001, 40.),labels=[True,False,False,False], linewidth=0.01, color='k', fontsize=20) # labels = [left,right,top,bottom] # Latitutes
+         m.drawmeridians(np.arange(P_lon0-180,P_lon0+180,60.),labels=[False,False,False,True], linewidth=0.01, color='k', fontsize=20) # labels = [left,right,top,bottom] # Longitudes        
+    if P_c_fill=='fill':
+        m.fillcontinents(color='0.8')
+    m.drawcoastlines(linewidth=1.0, linestyle='solid', color='k', antialiased=1, ax=None, zorder=None)
+    im=m.contourf(P_Lon, P_Lat, P_Var,P_range,latlon=True, cmap=P_cmap, extend='both')
+    if P_proj=='npstere' or P_proj=='spstere':
+        cbar = m.colorbar(im,"right", size="4%", pad="14%")
+    else:
+        cbar = m.colorbar(im,"right", size="3%", pad="2%")
+    cbar.ax.tick_params(labelsize=20) 
+    cbar.set_label(P_unit)
+    plt.show()
+    plt.title(P_title, fontsize=18)
+    mng = plt.get_current_fig_manager()
+    mng.window.showMaximized()
+    return fig, m
   
 #################################################################################################
 ###### North Atlantic Oscillation (NAO) calculated as the 1st EOF of Sea-Level Air Presure ######
